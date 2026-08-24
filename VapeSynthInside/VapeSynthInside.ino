@@ -23,15 +23,15 @@ Dependency Issues:
 
 #include <Arduino.h>
 #include <BLEMidi.h>
-#include "mappings.h" // notation to midi map
+#include "mappings.h"  // notation to midi map
 #include "driver/rtc_io.h"
 
 #define BUTTON_PIN_BITMASK(GPIO) (1ULL << GPIO)
 #define USE_EXT0_WAKEUP 0  // enable external wakeup 0 is for external
 
 // All pin numbers refer to GPIO numbers, not mapped digital "D" numbers
-#define WAKEUP_GPIO GPIO_NUM_4 // GPIO4 -> D3
-RTC_DATA_ATTR int bootCount = 0; // delete later not necessary
+#define WAKEUP_GPIO GPIO_NUM_4    // GPIO4 -> D3
+RTC_DATA_ATTR int bootCount = 0;  // delete later not necessary
 
 /*breathe sensor comm pins from breadboard*/
 #define sckPin 7    // GPIO7 -> D8
@@ -42,8 +42,8 @@ long THRESHOLD = 900000;  // adjust as needed
 long bTHRESHOLD = 10000;  // baseline threshold
 bool calibrated = false;  // calibration state
 
-long ptime = 0; // Calibration timer variable
-int interval = 10000; // Interval for calibration duration
+long ptime = 0;        // Calibration timer variable
+int interval = 10000;  // Interval for calibration duration
 
 // for drift and threshold calculations
 int driftcounter = 0;
@@ -53,7 +53,7 @@ int sum = 0;
 long pbreathe = 0;
 long baseline;
 long baselineavg = 0;
-bool playing = false; // Boolean for chord playing states
+bool playing = false;  // Boolean for chord playing states
 int dir = 0;
 int pdir = 0;
 int pnote = -1;
@@ -78,7 +78,7 @@ byte result = B0000;  // button results as bitmask
 int pstates[4] = {};
 int states[4] = {};
 int numButtons = 4;
-int buttonPins[4] = {1,2,3,5}; // GPIO PINS numbers
+int buttonPins[4] = { 1, 2, 3, 5 };  // GPIO PINS numbers
 // int buttonPins[4] = { 5, 6, 43, 44 }; // breadboard
 
 // Sleep and Calibration Variables
@@ -92,12 +92,13 @@ long threshHIGH = 0;
 long threshLOW = 100000000;
 
 // sleep and led blink indicator
-int sleepInterval = 3000; // Duration of press before sleeping
+int sleepInterval = 3000;  // Duration of press before sleeping
 int pSleepTime = 0;
 bool ledOn = false;
-int ledInterval = 500;
+int ledDisconnectedInterval = 250;
+int ledConnectedInterval = 1000;
 long pLed = 0;
-int ledPin = 21; // On board LED GPIO21
+int ledPin = 21;  // On board LED GPIO21
 
 void print_wakeup_reason() {
   esp_sleep_wakeup_cause_t wakeup_reason;
@@ -121,7 +122,7 @@ void setup() {
   Serial.println("Waiting for connections...");
   //BLEMidiServer.enableDebugging();  // Uncomment if you want to see some debugging output from the library (not much for the server class...)
   pinMode(resetButtonPin, INPUT_PULLUP);
-  
+
   /* note / chord buttons*/
   for (int i = 0; i < numButtons; i++) {
     pinMode(buttonPins[i], INPUT_PULLUP);
@@ -134,7 +135,7 @@ void setup() {
 
   /*LED*/
   pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, HIGH);
+  digitalWrite(ledPin, LOW);  // Internal LED has inverted logic. LOW means ON
 
   //readings//
   creadings = readButtons();
@@ -308,7 +309,7 @@ void loop() {
       Serial.print(" ");
       Serial.println(sensorHIGH);
     } else {
-      digitalWrite(ledPin, HIGH);
+      //digitalWrite(ledPin, HIGH);
       /*breath sensor*/
       while (digitalRead(dataPin)) {}
       long result = 0;
@@ -1154,9 +1155,14 @@ void loop() {
         }
       }
     }
+    if (millis() - pLed > ledConnectedInterval) {
+      ledOn = !ledOn;
+      pLed = millis();
+    }
+    digitalWrite(ledPin, ledOn);
   } else {
     // blink led when not connected
-    if (millis() - pLed > ledInterval) {
+    if (millis() - pLed > ledDisconnectedInterval) {
       ledOn = !ledOn;
       pLed = millis();
     }
