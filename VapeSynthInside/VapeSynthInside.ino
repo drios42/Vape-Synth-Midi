@@ -1,7 +1,21 @@
 /* 
 Vape Synth by David Rios, Shuang Cai, Kari Love
+
+Current Dependencies Issues (requires downgrading for now):
+  Only works with NimBLE-Arduino v1.4.3
+  ESP32-BLE-MIDI v0.3.2
+  esp32 3.3.0 board defs (last checked) 6/25/2026
+
+
 Documentation and 3d Print files can be found on the project Github Repo:
 https://github.com/drios42/Vape-Synth-Midi
+
+Seeed Studio Getting Started with Xiao esp32
+https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/
+
+ESP32 Board json file
+https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+
 
 Hardware used: 
   - Reclaimed NexBar casing and LiPo battery
@@ -14,10 +28,6 @@ Code Adapted from the Following resources and examples:
 
   hx710B by Homemade Circuits:
   https://www.homemade-circuits.com/hx710b-air-pressure-sensor-datasheet-how-to-connect/
-
-Dependency Issues:
-  Only works with NimBLE-Arduino v1.4.3
-  esp32 3.3.0 board defs (last checked) 6/25/2026
 */
 
 
@@ -90,6 +100,7 @@ long sensorHIGH = 0;
 long sensorLOW = 100000000;
 long threshHIGH = 0;
 long threshLOW = 100000000;
+bool startSleepTimer = false;
 
 // sleep and led blink indicator
 int sleepInterval = 3000;  // Duration of press before sleeping
@@ -100,6 +111,7 @@ int ledConnectedInterval = 1000;
 long pLed = 0;
 int ledPin = 21;  // On board LED GPIO21
 
+// From ESP32-BLE-MIDI example. Used for debugging currently
 void print_wakeup_reason() {
   esp_sleep_wakeup_cause_t wakeup_reason;
   wakeup_reason = esp_sleep_get_wakeup_cause();
@@ -118,7 +130,7 @@ void print_wakeup_reason() {
 void setup() {
   Serial.begin(115200);
   Serial.println("Initializing bluetooth");
-  BLEMidiServer.begin("Vape Synth");
+  BLEMidiServer.begin("Vape Synth"); // Give your vape a unique name here
   Serial.println("Waiting for connections...");
   //BLEMidiServer.enableDebugging();  // Uncomment if you want to see some debugging output from the library (not much for the server class...)
   pinMode(resetButtonPin, INPUT_PULLUP);
@@ -137,23 +149,23 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);  // Internal LED has inverted logic. LOW means ON
 
-  //readings//
+  //get initial readings, set state check variables//
   creadings = readButtons();
   preadings = -1;  // button readings
   ptime = millis();
   pReset = digitalRead(resetButtonPin);
   cReset = digitalRead(resetButtonPin);
+//  print_wakeup_reason();
 
-  print_wakeup_reason();
 #if USE_EXT0_WAKEUP
   esp_sleep_enable_ext0_wakeup(WAKEUP_GPIO, 0);
   rtc_gpio_pullup_en(WAKEUP_GPIO);
   rtc_gpio_pulldown_dis(WAKEUP_GPIO);
 
 #else
-  esp_sleep_enable_ext1_wakeup_io(BUTTON_PIN_BITMASK(WAKEUP_GPIO), ESP_EXT1_WAKEUP_ANY_LOW);
-  rtc_gpio_pulldown_dis(WAKEUP_GPIO);
-  rtc_gpio_pullup_en(WAKEUP_GPIO);
+  esp_sleep_enable_ext1_wakeup_io(BUTTON_PIN_BITMASK(WAKEUP_GPIO), ESP_EXT1_WAKEUP_ANY_LOW); // wake up on 0 - LOW
+  rtc_gpio_pulldown_dis(WAKEUP_GPIO); // disable pulldowns
+  rtc_gpio_pullup_en(WAKEUP_GPIO);    // enable pullups
 
 #endif
   Serial.println("NOT Going to sleep now");
@@ -161,6 +173,7 @@ void setup() {
   Serial.println("This will  be printed");
 }
 
+// function to get sensor minimums and maximums
 void calibrateSensor() {
   while (digitalRead(dataPin)) {}
   long breathe = 0;
@@ -222,8 +235,7 @@ void calibrateSensor() {
     Serial.println("done calibrating");
   }
 }
-int pResetButton = 1;
-bool startSleepTimer = false;
+
 
 void loop() {
   //  initial calibration
